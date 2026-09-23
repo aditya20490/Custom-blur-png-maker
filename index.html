@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Blur PNG Generator</title>
+
+<style>
+    * {
+        box-sizing: border-box;
+    }
+
+    body {
+        margin: 0;
+        font-family: Arial, sans-serif;
+        background: #f4f4f4;
+        color: #111;
+    }
+
+    .container {
+        max-width: 900px;
+        margin: 40px auto;
+        padding: 20px;
+    }
+
+    h1 {
+        text-align: center;
+        margin-bottom: 8px;
+    }
+
+    .subtitle {
+        text-align: center;
+        color: #666;
+        margin-bottom: 30px;
+    }
+
+    .app {
+        background: white;
+        border-radius: 18px;
+        padding: 25px;
+        box-shadow: 0 8px 30px rgba(0,0,0,0.08);
+    }
+
+    .controls {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 20px;
+        margin-bottom: 30px;
+    }
+
+    .control {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    label {
+        font-weight: bold;
+    }
+
+    select,
+    input[type="number"] {
+        width: 100%;
+        padding: 11px;
+        border: 1px solid #ccc;
+        border-radius: 9px;
+        font-size: 15px;
+    }
+
+    input[type="range"] {
+        width: 100%;
+    }
+
+    .value {
+        font-size: 14px;
+        color: #666;
+    }
+
+    .preview-title {
+        font-weight: bold;
+        margin-bottom: 10px;
+    }
+
+    .preview {
+        width: 100%;
+        min-height: 350px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+
+        /* checkerboard = transparency */
+        background-color: #fff;
+        background-image:
+            linear-gradient(45deg, #ddd 25%, transparent 25%),
+            linear-gradient(-45deg, #ddd 25%, transparent 25%),
+            linear-gradient(45deg, transparent 75%, #ddd 75%),
+            linear-gradient(-45deg, transparent 75%, #ddd 75%);
+        background-size: 30px 30px;
+        background-position: 0 0, 0 15px, 15px -15px, -15px 0px;
+
+        overflow: hidden;
+    }
+
+    canvas {
+        max-width: 90%;
+        max-height: 320px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+    }
+
+    .download {
+        width: 100%;
+        margin-top: 25px;
+        padding: 15px;
+        border: none;
+        border-radius: 10px;
+        background: #111;
+        color: white;
+        font-size: 17px;
+        font-weight: bold;
+        cursor: pointer;
+    }
+
+    .download:hover {
+        background: #333;
+    }
+
+    @media (max-width: 650px) {
+        .controls {
+            grid-template-columns: 1fr;
+        }
+
+        .container {
+            margin: 15px auto;
+        }
+    }
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+    <h1>Blur PNG Generator</h1>
+    <div class="subtitle">
+        Create transparent Gaussian blur overlays and download them as PNG.
+    </div>
+
+    <div class="app">
+
+        <div class="controls">
+
+            <div class="control">
+                <label for="shape">Shape</label>
+                <select id="shape">
+                    <option value="rectangle">Rectangle</option>
+                    <option value="square">Square</option>
+                    <option value="circle">Circle</option>
+                    <option value="oval">Oval</option>
+                </select>
+            </div>
+
+            <div class="control">
+                <label for="blur">Gaussian Blur</label>
+                <input type="range" id="blur" min="0" max="100" value="25">
+                <div class="value">
+                    Blur: <span id="blurValue">25</span> px
+                </div>
+            </div>
+
+            <div class="control">
+                <label for="width">Width</label>
+                <input type="number" id="width" min="10" max="4000" value="500">
+            </div>
+
+            <div class="control">
+                <label for="height">Height</label>
+                <input type="number" id="height" min="10" max="4000" value="300">
+            </div>
+
+            <div class="control">
+                <label for="opacity">Opacity</label>
+                <input type="range" id="opacity" min="0" max="100" value="100">
+                <div class="value">
+                    Opacity: <span id="opacityValue">100</span>%
+                </div>
+            </div>
+
+        </div>
+
+        <div class="preview-title">Preview</div>
+
+        <div class="preview">
+            <canvas id="canvas"></canvas>
+        </div>
+
+        <button class="download" id="download">
+            Download Blur PNG
+        </button>
+
+    </div>
+</div>
+
+<script>
+
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+
+const shape = document.getElementById("shape");
+const blur = document.getElementById("blur");
+const widthInput = document.getElementById("width");
+const heightInput = document.getElementById("height");
+const opacity = document.getElementById("opacity");
+
+const blurValue = document.getElementById("blurValue");
+const opacityValue = document.getElementById("opacityValue");
+
+function updatePreview() {
+
+    let width = parseInt(widthInput.value) || 500;
+    let height = parseInt(heightInput.value) || 300;
+
+    width = Math.max(10, Math.min(width, 4000));
+    height = Math.max(10, Math.min(height, 4000));
+
+    const blurAmount = parseInt(blur.value);
+    const alpha = parseInt(opacity.value) / 100;
+
+    blurValue.textContent = blurAmount;
+    opacityValue.textContent = opacity.value;
+
+    /*
+        Extra transparent padding is necessary because
+        Gaussian blur spreads outside the original shape.
+    */
+
+    const padding = blurAmount * 3 + 10;
+
+    canvas.width = width + padding * 2;
+    canvas.height = height + padding * 2;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    ctx.save();
+
+    /*
+        Create the shape mask.
+    */
+
+    ctx.beginPath();
+
+    const x = padding;
+    const y = padding;
+
+    if (shape.value === "rectangle") {
+
+        ctx.rect(x, y, width, height);
+
+    }
+
+    else if (shape.value === "square") {
+
+        const size = Math.min(width, height);
+
+        const sx = padding + (width - size) / 2;
+        const sy = padding + (height - size) / 2;
+
+        ctx.rect(sx, sy, size, size);
+
+    }
+
+    else if (shape.value === "circle") {
+
+        const radius = Math.min(width, height) / 2;
+
+        const cx = padding + width / 2;
+        const cy = padding + height / 2;
+
+        ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+
+    }
+
+    else if (shape.value === "oval") {
+
+        const cx = padding + width / 2;
+        const cy = padding + height / 2;
+
+        ctx.ellipse(
+            cx,
+            cy,
+            width / 2,
+            height / 2,
+            0,
+            0,
+            Math.PI * 2
+        );
+    }
+
+    /*
+        The actual blur.
+    */
+
+    ctx.filter = `blur(${blurAmount}px)`;
+
+    ctx.fillStyle = `rgba(128, 128, 128, ${alpha})`;
+
+    ctx.fill();
+
+    ctx.restore();
+
+}
+
+
+/*
+    Update whenever a setting changes.
+*/
+
+shape.addEventListener("change", updatePreview);
+blur.addEventListener("input", updatePreview);
+widthInput.addEventListener("input", updatePreview);
+heightInput.addEventListener("input", updatePreview);
+opacity.addEventListener("input", updatePreview);
+
+
+/*
+    Download the actual transparent PNG.
+*/
+
+document.getElementById("download").addEventListener("click", function () {
+
+    canvas.toBlob(function(blob) {
+
+        const url = URL.createObjectURL(blob);
+
+        const link = document.createElement("a");
+
+        link.href = url;
+        link.download = "blur-overlay.png";
+
+        document.body.appendChild(link);
+
+        link.click();
+
+        document.body.removeChild(link);
+
+        URL.revokeObjectURL(url);
+
+    }, "image/png");
+
+});
+
+
+/*
+    Initial render.
+*/
+
+updatePreview();
+
+</script>
+
+</body>
+</html>
